@@ -20,26 +20,13 @@
 															? ((bf) & ~(b)) \
 															: ((bf) | (b))
 
-void print_state(struct cwiid_state *state);
-
 void set_led_state(cwiid_wiimote_t *wiimote, unsigned char led_state);
 void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode);
-
 int *get_pos(struct cwiid_state *state_h, struct cwiid_state *state_v);
-
-cwiid_err_t err;
-
-void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap)
-{
-								if (wiimote) printf("%d:", cwiid_get_id(wiimote));
-								else printf("-1:");
-								vprintf(s, ap);
-								printf("\n");
-}
 
 int main(int argc, char *argv[])
 {
-								bdaddr_t my_bdaddr_any = { 0 };
+								/* Sockets */
 
 								int client_s;
 								struct sockaddr_in server_addr;
@@ -51,20 +38,21 @@ int main(int argc, char *argv[])
 							  int flags = fcntl	(client_s, F_GETFL, 0);
 							  fcntl(client_s, F_SETFL, flags | O_NONBLOCK);
 
-								server_addr.sin_family = AF_INET;                 // Address family to use
-							  server_addr.sin_port = htons(PORT);           // Port num to use
-							  server_addr.sin_addr.s_addr = inet_addr(IP_ADDR); // IP address to use
+								server_addr.sin_family = AF_INET;
+							  server_addr.sin_port = htons(PORT);
+							  server_addr.sin_addr.s_addr = inet_addr(IP_ADDR);
 
 								struct timespec ts;
 								ts.tv_sec = DELAY / 1000;
     						ts.tv_nsec = (DELAY % 1000) * 1000000;
-
+								/* CWIID */
 								cwiid_wiimote_t *wm_h; // horizontal wiimote
 								cwiid_wiimote_t *wm_v; // vertical wiimote
 
 								struct cwiid_state state_h;
 								struct cwiid_state state_v;
 
+								bdaddr_t my_bdaddr_any = { 0 };
 								bdaddr_t bdaddr_h; // bluetooth device address
 								bdaddr_t bdaddr_v;
 
@@ -73,8 +61,6 @@ int main(int argc, char *argv[])
 								unsigned char rpt_mode = 0;
 
 								int *pos;
-
-								cwiid_set_err(err);
 
 								/* Connect to address given on command-line, if present */
 								if (argc > 2) {
@@ -146,23 +132,7 @@ void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode)
 								}
 }
 
-void print_state(struct cwiid_state *state)
-{
-								int valid_source = 0;
-								for (int i = 0; i < CWIID_IR_SRC_COUNT; i++) {
-																if (state->ir_src[i].valid) {
-																								valid_source = 1;
-																								printf("(%d,%d) ", state->ir_src[i].pos[CWIID_X],
-																															state->ir_src[i].pos[CWIID_Y]);
-																}
-								}
-								if (!valid_source) {
-																printf("no sources detected");
-								}
-								printf("\n");
-}
-
-int *get_pos(struct cwiid_state *state_h, struct cwiid_state * state_v)
+int *get_pos(struct cwiid_state *state_h, struct cwiid_state * state_v) // TODO: localize array
 {
 								static int pos[2] = { -1 };
 								if (state_h->ir_src[0].valid) {
@@ -174,5 +144,3 @@ int *get_pos(struct cwiid_state *state_h, struct cwiid_state * state_v)
 								}
 								return pos;
 }
-
-// TODO: host:port as argument
