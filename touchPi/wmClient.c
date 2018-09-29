@@ -1,6 +1,9 @@
+#include <ctype.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -11,9 +14,7 @@
 #include <bluetooth/bluetooth.h>
 #include <cwiid.h>
 
-#define PORT 11000
-#define IP_ADDR "192.168.0.73"
-#define DELAY 100
+#define DELAY 200
 
 #define toggle_bit(bf,b) \
 								(bf) = ((bf) & b)  \
@@ -22,29 +23,29 @@
 
 void set_led_state(cwiid_wiimote_t *wiimote, unsigned char led_state);
 void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode);
-int *get_pos(struct cwiid_state *state_h, struct cwiid_state *state_v);
+void get_pos(int *buf, struct cwiid_state *state_h, struct cwiid_state *state_v);
+
+void print_usage() {
+								printf("Usage: wmclient host port [-i interval] [-H mac] [-V mac] [-lv]\n");
+}
 
 int main(int argc, char *argv[])
 {
 								/* Sockets */
-
 								int client_s;
 								struct sockaddr_in server_addr;
+								struct timespec ts;
+								int interval;
+								bool verbose = false;
 								char send_str[9];
 								if ((client_s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 																printf("\n Socket creation error \n");
 																return -1;
 								}
-							  int flags = fcntl	(client_s, F_GETFL, 0);
-							  fcntl(client_s, F_SETFL, flags | O_NONBLOCK);
-
 								server_addr.sin_family = AF_INET;
-							  server_addr.sin_port = htons(PORT);
-							  server_addr.sin_addr.s_addr = inet_addr(IP_ADDR);
+								int flags = fcntl (client_s, F_GETFL, 0);
+								fcntl(client_s, F_SETFL, flags | O_NONBLOCK);
 
-								struct timespec ts;
-								ts.tv_sec = DELAY / 1000;
-    						ts.tv_nsec = (DELAY % 1000) * 1000000;
 								/* CWIID */
 								cwiid_wiimote_t *wm_h; // horizontal wiimote
 								cwiid_wiimote_t *wm_v; // vertical wiimote
@@ -52,30 +53,59 @@ int main(int argc, char *argv[])
 								struct cwiid_state state_h;
 								struct cwiid_state state_v;
 
-								bdaddr_t my_bdaddr_any = { 0 };
-								bdaddr_t bdaddr_h; // bluetooth device address
-								bdaddr_t bdaddr_v;
+								bdaddr_t bdaddr_h = { 0 }; // bluetooth device address
+								bdaddr_t bdaddr_v = { 0 };
 
+								bool leds = true;
 								unsigned char led_state_h = 0;
 								unsigned char led_state_v = 0;
 								unsigned char rpt_mode = 0;
 
-								int *pos;
+								int pos[2];
 
 								/* Connect to address given on command-line, if present */
-								if (argc > 2) {
-																str2ba(argv[1], &bdaddr_h);
-																str2ba(argv[2], &bdaddr_v);
-								}
-								else {
-																if (argc > 1) {
-																								printf("Usage: wmClient [host:port] [[MAC_H] [MAC_V]]\n"
-																															"Could not parse valid mac addresses.\n");
+								int c;
+								while ((c = getopt (argc, argv, "lvH:V:i:")) != -1)
+																switch (c)
+																{
+																case 'H': str2ba(optarg, &bdaddr_h);
+																								break;
+																case 'V': str2ba(optarg, &bdaddr_v);
+																								break;
+																case 'i': interval = atoi(optarg);
+																								break;
+																case 'l': leds = false;
+																								break;
+																case 'v': verbose = true;
+																								break;
+																case '?':
+																								if ((optopt == 'H') | (optopt == 'V') | (optopt == 'i'))
+																																fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+																								else if (isprint (optopt))
+																																fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+																								else
+																																fprintf (stderr, "Unknown option character `\\x%x'.\n",
+																																									optopt);
+																								return 1;
+																default:
+																								abort ();
 																}
-																printf("Using bluetooth discovery...\n");
-																bdaddr_h = my_bdaddr_any;
-																bdaddr_v = my_bdaddr_any;
+
+								int index = optind;
+
+								if (argc - index > 1) {
+																server_addr.sin_addr.s_addr = inet_addr(argv[index]);
+																server_addr.sin_port = htons(atoi(argv[index+1]));
+								} else {
+																print_usage();
+																exit(EXIT_FAILURE);
 								}
+
+								if (!interval) {
+																interval = DELAY;
+								}
+								ts.tv_sec = interval / 1000;
+								ts.tv_nsec = (interval % 1000) * 1000000;
 
 
 								/* Connect to the wiimote */
@@ -90,6 +120,7 @@ int main(int argc, char *argv[])
 																fprintf(stderr, "Unable to connect to vertical Wiimote\n");
 																return -1;
 								}
+								printf("Connected!\n");
 
 								/* Set IR reporting mode*/
 								toggle_bit(rpt_mode, CWIID_RPT_IR);
@@ -97,21 +128,25 @@ int main(int argc, char *argv[])
 								set_rpt_mode(wm_v, rpt_mode);
 
 								/* Turn on LEDs */
-								toggle_bit(led_state_h, CWIID_LED1_ON);
-								toggle_bit(led_state_v, CWIID_LED2_ON);
-								set_led_state(wm_h, led_state_h);
-								set_led_state(wm_v, led_state_v);
+								if (leds) {
+																toggle_bit(led_state_h, CWIID_LED1_ON);
+																toggle_bit(led_state_v, CWIID_LED2_ON);
+																set_led_state(wm_h, led_state_h);
+																set_led_state(wm_v, led_state_v);
+								}
 
 								while (1) {
 																if (cwiid_get_state(wm_h, &state_h) | cwiid_get_state(wm_v, &state_v)) {
 																								fprintf(stderr, "Error getting state\n");
 																}
 
-																pos = get_pos(&state_h, &state_v);
+																get_pos(pos, &state_h, &state_v);
 
 																if ((pos[0] >= 0) && (pos[1] >= 0)) {
 																								sprintf(send_str, "%d,%d", pos[0], pos[1]);
-																								printf("%d,%d\n",pos[0], pos[1]);
+																								if (verbose) {
+																																printf("%d,%d\n",pos[0], pos[1]);
+																								}
 																								sendto(client_s, send_str, strlen(send_str)+1, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
 																								nanosleep(&ts, NULL);
 																}
@@ -132,15 +167,18 @@ void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode)
 								}
 }
 
-int *get_pos(struct cwiid_state *state_h, struct cwiid_state * state_v) // TODO: localize array
+void get_pos(int *buf, struct cwiid_state *state_h, struct cwiid_state * state_v)
 {
-								static int pos[2] = { -1 };
+
 								if (state_h->ir_src[0].valid) {
-																pos[0] = state_h->ir_src[0].pos[CWIID_X];
+																buf[0] = state_h->ir_src[0].pos[CWIID_X];
+								} else {
+																buf[0] = -1;
 								}
 
 								if (state_v->ir_src[0].valid) {
-																pos[1] = state_v->ir_src[0].pos[CWIID_X];
+																buf[1] = state_v->ir_src[0].pos[CWIID_X];
+								} else {
+																buf[1] = -1;
 								}
-								return pos;
 }
