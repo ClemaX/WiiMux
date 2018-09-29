@@ -32,12 +32,13 @@ void print_usage() {
 int main(int argc, char *argv[])
 {
 								/* Sockets */
-								int client_s;
 								struct sockaddr_in server_addr;
 								struct timespec ts;
-								int interval;
 								bool verbose = false;
 								char send_str[9];
+								int client_s;
+								int interval;
+
 								if ((client_s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 																printf("\n Socket creation error \n");
 																return -1;
@@ -107,6 +108,9 @@ int main(int argc, char *argv[])
 								ts.tv_sec = interval / 1000;
 								ts.tv_nsec = (interval % 1000) * 1000000;
 
+								printf("Sending to %s:%s every %dms",
+															argv[index], argv[index+1], interval);
+
 
 								/* Connect to the wiimote */
 								printf("Put horizontal Wiimote in discoverable mode now (press 1+2)...\n");
@@ -135,6 +139,7 @@ int main(int argc, char *argv[])
 																set_led_state(wm_v, led_state_v);
 								}
 
+								/* Report IR state */
 								while (1) {
 																if (cwiid_get_state(wm_h, &state_h) | cwiid_get_state(wm_v, &state_v)) {
 																								fprintf(stderr, "Error getting state\n");
