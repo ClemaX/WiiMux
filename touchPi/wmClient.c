@@ -26,7 +26,10 @@ void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode);
 void get_pos(int *buf, struct cwiid_state *state_h, struct cwiid_state *state_v);
 
 void print_usage() {
-								printf("Usage: wmclient host port [-i interval] [-H mac] [-V mac] [-lv]\n");
+								printf("Usage: wmclient HOST PORT [-i interval] [-H mac] [-V mac] [-lv]\n\n"
+															"Arguments:\n"
+															"	-l	Do not use LEDs\n"
+															"	-v	Print state to stdout\n");
 }
 
 int main(int argc, char *argv[])
