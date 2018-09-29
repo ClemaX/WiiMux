@@ -14,7 +14,7 @@
 #include <bluetooth/bluetooth.h>
 #include <cwiid.h>
 
-#define DELAY 200
+#define DELAY 50
 
 #define toggle_bit(bf,b) \
 								(bf) = ((bf) & b)  \
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 								bool verbose = false;
 								char send_str[9];
 								int client_s;
-								int interval;
+								int interval = -1;
 
 								if ((client_s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 																printf("\n Socket creation error \n");
@@ -92,25 +92,19 @@ int main(int argc, char *argv[])
 																								abort ();
 																}
 
-								int index = optind;
-
-								if (argc - index > 1) {
-																server_addr.sin_addr.s_addr = inet_addr(argv[index]);
-																server_addr.sin_port = htons(atoi(argv[index+1]));
+								if (argc - optind > 1) {
+																server_addr.sin_addr.s_addr = inet_addr(argv[optind]);
+																server_addr.sin_port = htons(atoi(argv[optind+1]));
 								} else {
 																print_usage();
 																exit(EXIT_FAILURE);
 								}
 
-								if (!interval) {
+								if (interval < 0) {
 																interval = DELAY;
 								}
 								ts.tv_sec = interval / 1000;
 								ts.tv_nsec = (interval % 1000) * 1000000;
-
-								printf("Sending to %s:%s every %dms",
-															argv[index], argv[index+1], interval);
-
 
 								/* Connect to the wiimote */
 								printf("Put horizontal Wiimote in discoverable mode now (press 1+2)...\n");
@@ -124,7 +118,8 @@ int main(int argc, char *argv[])
 																fprintf(stderr, "Unable to connect to vertical Wiimote\n");
 																return -1;
 								}
-								printf("Connected!\n");
+								printf("Sending to %s:%s every %dms\n",
+															argv[optind], argv[optind+1], interval);
 
 								/* Set IR reporting mode*/
 								toggle_bit(rpt_mode, CWIID_RPT_IR);
