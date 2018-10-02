@@ -1,6 +1,5 @@
 # WiiMux
-Wiimote IR Multiplexer
-Reports the position of a tracked point via UDP sockets.
+Wiimote IR Multiplexer, reports the position of a tracked point via UDP sockets.
 
 ## Getting Started
 
