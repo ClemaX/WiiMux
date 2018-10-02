@@ -23,10 +23,10 @@
 
 void set_led_state(cwiid_wiimote_t *wiimote, unsigned char led_state);
 void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode);
-void get_pos(int *buf, struct cwiid_state *state_h, struct cwiid_state *state_v);
+void get_pos(int *buf, cwiid_wiimote_t *wm_h, cwiid_wiimote_t *wm_v, struct cwiid_state *state_h, struct cwiid_state *state_v, int n);
 
 void print_usage() {
-								printf("Usage: wmclient HOST PORT [-i interval] [-H mac] [-V mac] [-lv]\n\n"
+								printf("Usage: wmclient HOST PORT [-i interval] [-c count] [-H mac] [-V mac] [-lv]\n\n"
 															"Arguments:\n"
 															"	-l	Do not use LEDs\n"
 															"	-v	Print state to stdout\n");
@@ -34,14 +34,14 @@ void print_usage() {
 
 int main(int argc, char *argv[])
 {
+								bool verbose = false, leds = true;
+								int c, interval = -1, count = -1, pos[2];
+
 								/* Sockets */
 								struct sockaddr_in server_addr;
 								struct timespec ts;
-								bool verbose = false;
 								char send_str[9];
 								int client_s;
-								int interval = -1;
-
 								if ((client_s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 																printf("\n Socket creation error \n");
 																return -1;
@@ -51,25 +51,17 @@ int main(int argc, char *argv[])
 								fcntl(client_s, F_SETFL, flags | O_NONBLOCK);
 
 								/* CWIID */
-								cwiid_wiimote_t *wm_h; // horizontal wiimote
-								cwiid_wiimote_t *wm_v; // vertical wiimote
+								cwiid_wiimote_t *wm_h, *wm_v; // wiimotes
 
 								struct cwiid_state state_h;
 								struct cwiid_state state_v;
 
-								bdaddr_t bdaddr_h = { 0 }; // bluetooth device address
-								bdaddr_t bdaddr_v = { 0 };
+								bdaddr_t bdaddr_h = { 0 }, bdaddr_v = { 0 }; // bluetooth device address
 
-								bool leds = true;
-								unsigned char led_state_h = 0;
-								unsigned char led_state_v = 0;
-								unsigned char rpt_mode = 0;
-
-								int pos[2];
+								unsigned char led_state_h = 0, led_state_v = 0, rpt_mode = 0;
 
 								/* Connect to address given on command-line, if present */
-								int c;
-								while ((c = getopt (argc, argv, "lvH:V:i:")) != -1)
+								while ((c = getopt (argc, argv, "lvH:V:i:c:")) != -1)
 																switch (c)
 																{
 																case 'H': str2ba(optarg, &bdaddr_h);
@@ -77,6 +69,8 @@ int main(int argc, char *argv[])
 																case 'V': str2ba(optarg, &bdaddr_v);
 																								break;
 																case 'i': interval = atoi(optarg);
+																								break;
+																case 'c': count = atoi(optarg);
 																								break;
 																case 'l': leds = false;
 																								break;
@@ -103,8 +97,13 @@ int main(int argc, char *argv[])
 																exit(EXIT_FAILURE);
 								}
 
-								if (interval < 0) {
+								if (count > 0) {
+																interval = 0;
+								} else if (interval < 0) {
 																interval = DELAY;
+																count = 1;
+								} else {
+																count = 1;
 								}
 								ts.tv_sec = interval / 1000;
 								ts.tv_nsec = (interval % 1000) * 1000000;
@@ -138,14 +137,20 @@ int main(int argc, char *argv[])
 								}
 
 								/* Report IR state */
+								bool sent_click = false, send = false;
 								while (1) {
-																if (cwiid_get_state(wm_h, &state_h) | cwiid_get_state(wm_v, &state_v)) {
-																								fprintf(stderr, "Error getting state\n");
-																}
-
-																get_pos(pos, &state_h, &state_v);
+																get_pos(pos, wm_h, wm_v, &state_h, &state_v, count);
 
 																if ((pos[0] >= 0) && (pos[1] >= 0)) {
+																								send = true;
+																								sent_click = false;
+																} else if (!sent_click) {
+																								send = sent_click = true;
+																} else {
+																								send = false;
+																}
+
+																if (send) {
 																								sprintf(send_str, "%d,%d", pos[0], pos[1]);
 																								if (verbose) {
 																																printf("%d,%d\n",pos[0], pos[1]);
@@ -159,7 +164,7 @@ int main(int argc, char *argv[])
 void set_led_state(cwiid_wiimote_t *wiimote, unsigned char led_state)
 {
 								if (cwiid_set_led(wiimote, led_state)) {
-																fprintf(stderr, "Error setting LEDs \n");
+																fprintf(stderr, "Error setting LEDs\n");
 								}
 }
 
@@ -170,18 +175,30 @@ void set_rpt_mode(cwiid_wiimote_t *wiimote, unsigned char rpt_mode)
 								}
 }
 
-void get_pos(int *buf, struct cwiid_state *state_h, struct cwiid_state * state_v)
-{
+void get_pos(int *buf, cwiid_wiimote_t *wm_h, cwiid_wiimote_t *wm_v, struct cwiid_state *state_h, struct cwiid_state *state_v, int n)
+{								int i, sum_h = 0, sum_v = 0, n_h = 0, n_v = 0;
+								for (i = 0; i < n; ++i)
+								{
+																if (cwiid_get_state(wm_h, state_h) | cwiid_get_state(wm_v, state_v)) {
+																								fprintf(stderr, "Error getting state\n");
+																}
 
-								if (state_h->ir_src[0].valid) {
-																buf[0] = state_h->ir_src[0].pos[CWIID_X];
-								} else {
-																buf[0] = -1;
+																if (state_h->ir_src[0].valid) {
+																								sum_h += state_h->ir_src[0].pos[CWIID_X];
+																								n_h++;
+																} 
+
+																if (state_v->ir_src[0].valid) {
+																								sum_v += state_v->ir_src[0].pos[CWIID_X];
+																								n_v++;
+																}
+
+																if ((n_h > 0) && (n_v > 0)) {
+																								buf[0] = sum_h / n_h;
+																								buf[1] = sum_v / n_v;
+																} else {
+																								buf[0] = buf[1] = -1;
+																}
 								}
 
-								if (state_v->ir_src[0].valid) {
-																buf[1] = state_v->ir_src[0].pos[CWIID_X];
-								} else {
-																buf[1] = -1;
-								}
 }
