@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 	struct cwiid_state state_h;
 	struct cwiid_state state_v;
 
-	bdaddr_t bdaddr_h = { 0 }, bdaddr_v = { 0 };                 // bluetooth device address
+	bdaddr_t bdaddr_h = { 0 }, bdaddr_v = { 0 };  // bluetooth device address
 
 	unsigned char led_state_h = 0, led_state_v = 0, rpt_mode = 0;
 
