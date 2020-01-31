@@ -58,5 +58,5 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 ## Acknowledgments
 
 * Thanks to abstrakraft for providing the [CWiid library](https://github.com/abstrakraft/cwiid)
-* Thanks to [Johnny Chung Lee](http://www.johnnylee.net/academic/)  for the [inspriration](http://www.johnnylee.net/projects/wii/)
+* Thanks to [Johnny Chung Lee](http://www.johnnylee.net/academic/)  for the [inspiration](http://www.johnnylee.net/projects/wii/)
 * Thanks to PurpleBooth for providing this [readme template](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2)
